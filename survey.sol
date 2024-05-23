@@ -27,37 +27,37 @@ contract BlockPoll {
     // ID to track and assign to the next survey created
     uint public nextSurveyId;
 
-    // Function to register a user with a custom name
+    // Register a user with a custom name
     function register(string calldata userName) external 
     {
         ...
     }
 
-    // Function to create a new survey
+    // Create a new survey
     function createSurvey(string calldata description, uint[] calldata options, uint durationInBlocks, uint maxDataPoints) external 
     {
         ...
     }
 
-    // Function for a user to vote in a survey
+    // Vote in a survey
     function vote(uint surveyId, uint optionIndex) external 
     {
         ...
     }
 
-    // Function to manually close a survey
+    // Manually close a survey
     function closeSurvey(uint surveyId) public 
     {
         ...
     }
 
-    // Function to claim rewards, simplified to evenly split contract balance among participants
+    // Function to claim rewards
     function claimRewards(uint surveyId) external 
     {
         ...
     }
 
-    // Allow contract to receive ETH
+    // Payout func
     receive() external payable 
     {
 
