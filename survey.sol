@@ -54,7 +54,17 @@ contract BlockPoll {
     // Vote in a survey
     function vote(uint surveyId, uint optionIndex) external 
     {
-        ...
+        Survey storage survey = surveys[surveyId];
+        require(survey.dataCount < survey.maxDataPoints, "Maximum answers reached");
+        require(survey.isOpen == true, "Survey is closed");
+        require(survey.hasVoted[msg.sender] == false, "You can only vote once.");
+        survey.results[optionIndex] += 1;
+        survey.dataCount += 1;
+        survey.hasVoted[msg.sender] = true;
+        if (survey.dataCount == survey.maxDataPoints)
+        {
+            closeSurvey(surveyId);
+        }
     }
 
     // Close a survey
