@@ -18,6 +18,8 @@ contract BlockPoll {
         uint expiryBlock; // Not sure how to use this
         bool isOpen; // check if the survey is still open for responses
         bool allowPublicResults; // Allow viewing results after the survey has closed
+        address[] participants; // List of participants in the survey
+
     }
 
     // Mapping from survey ID to Survey struct, storing all surveys
@@ -61,9 +63,27 @@ contract BlockPoll {
         survey.results[optionIndex] += 1;
         survey.dataCount += 1;
         survey.hasVoted[msg.sender] = true;
+        survey.participants.push(msg.sender); // Add participant to the list
+
         if (survey.dataCount == survey.maxDataPoints)
         {
             closeSurvey(surveyId);
+        }
+    }
+
+        // Function to distribute rewards
+    function distributeRewards(uint surveyId) external 
+    {
+        Survey storage survey = surveys[surveyId];
+        require(!survey.isOpen, "Survey must be closed to distribute rewards");
+
+        uint totalReward = address(this).balance;
+        uint rewardPerParticipant = totalReward / survey.participants.length;
+
+        for (uint i = 0; i < survey.participants.length; i++) {
+            address participant = survey.participants[i];
+            (bool sent, ) = participant.call{value: rewardPerParticipant}("");
+            require(sent, "Failed to send reward to participant");
         }
     }
 
@@ -79,11 +99,7 @@ contract BlockPoll {
         }
     }
 
-    // Function to distribute rewards
-    function distributeRewards(uint surveyId) external 
-    {
-        ...
-    }
+
 
     // Payout func
     receive() external payable 
