@@ -22,6 +22,9 @@ contract BlockPoll {
 
     }
 
+    // Mapping of survey ID to (participant address to reward balance)
+    mapping(uint => mapping(address => uint)) public rewardBalances;
+
     // Mapping from survey ID to Survey struct, storing all surveys
     mapping(uint => Survey) public surveys;
 
@@ -50,7 +53,7 @@ contract BlockPoll {
         newSurvey.maxDataPoints = maxDataPoints;
         newSurvey.owner = msg.sender;
         newSurvey.isOpen = true;
-        newSurvey.publicResults =publicResults;
+        newSurvey.allowPublicResults =publicResults;
     }
 
     // Vote in a survey
@@ -64,26 +67,11 @@ contract BlockPoll {
         survey.dataCount += 1;
         survey.hasVoted[msg.sender] = true;
         survey.participants.push(msg.sender); // Add participant to the list
+        survey.lastVoteTimestamp[msg.sender] = block.timestamp;
 
         if (survey.dataCount == survey.maxDataPoints)
         {
             closeSurvey(surveyId);
-        }
-    }
-
-        // Function to distribute rewards
-    function distributeRewards(uint surveyId) external 
-    {
-        Survey storage survey = surveys[surveyId];
-        require(!survey.isOpen, "Survey must be closed to distribute rewards");
-
-        uint totalReward = address(this).balance;
-        uint rewardPerParticipant = totalReward / survey.participants.length;
-
-        for (uint i = 0; i < survey.participants.length; i++) {
-            address participant = survey.participants[i];
-            (bool sent, ) = participant.call{value: rewardPerParticipant}("");
-            require(sent, "Failed to send reward to participant");
         }
     }
 
@@ -95,15 +83,86 @@ contract BlockPoll {
                 block.number >= survey.expiryBlock, "Cannot close survey yet");
         if (survey.isOpen) {
             survey.isOpen = false;
-            distributeRewards(surveyId);
+            calculateRewards(surveyId);
         }
     }
 
-
-
-    // Payout func
-    receive() external payable 
+    function viewResults(uint surveyId) public view returns (uint[] memory) 
     {
+        Survey storage survey = surveys[surveyId];
 
+        require(survey.allowPublicResults || msg.sender == survey.owner, "Not authorized to view results");
+        uint[] memory resultsArray = new uint[](survey.options.length);
+        
+        for (uint i = 0; i < survey.options.length; i++) 
+        {
+            resultsArray[i] = survey.results[i];
+        }
+        return resultsArray;
     }
+
+    function viewSurveys() public view returns (uint[] memory) 
+    {
+        uint[] memory surveyIds = new uint[](nextSurveyId);
+        for (uint i = 0; i < nextSurveyId; i++) 
+        {
+            surveyIds[i] = i;
+        }
+        return surveyIds;
+    }
+
+    function calculateRewards(uint surveyId) internal 
+    {
+        Survey storage survey = surveys[surveyId];
+        require(!survey.isOpen, "Survey must be closed to distribute rewards");
+
+        uint totalReward = address(this).balance;
+
+        uint eligibleForExtra = 0;
+        for (uint i = 0; i < survey.participants.length; i++) 
+        {
+            if (block.timestamp - survey.lastVoteTimestamp[survey.participants[i]] <= 1 days) 
+            {
+                eligibleForExtra++;
+            }
+        }
+
+        if (eligibleForExtra != 0)
+        {
+            uint baseRewardPerParticipant = totalReward / survey.participants.length;
+            uint extraReward = (baseRewardPerParticipant * (10 / 100)) * survey.participants.length / eligibleForExtra;
+        }
+        else
+        {
+            uint baseRewardPerParticipant = totalReward / survey.participants.length;
+            uint extraReward = 0;
+        }
+        
+        for (uint i = 0; i < survey.participants.length; i++) 
+        {
+            address participant = survey.participants[i];
+            uint participantReward = baseRewardPerParticipant;
+
+            if (block.timestamp - survey.lastVoteTimestamp[participant] <= 1 days) 
+            {
+                participantReward += extraReward;
+            }
+
+            rewardBalances[surveyId][participant] += participantReward;
+        }
+    }
+
+    // Function for participants to withdraw their rewards
+    function withdrawReward(uint surveyId) public 
+    {
+        uint reward = rewardBalances[surveyId][msg.sender];
+        require(reward > 0, "No reward available or already claimed.");
+
+        // Clear balances to prevent reentry attack
+        rewardBalances[surveyId][msg.sender] = 0;
+        (bool sent, ) = msg.sender.call{value: reward}("");
+        require(sent, "Failed to send reward");
+    }
+
+    receive() external payable {}
 }
