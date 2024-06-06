@@ -34,6 +34,31 @@ contract BlockPoll {
     // ID to track and assign to the next survey created
     uint public nextSurveyId;
 
+    // Records the amount of Ether each user has staked
+    mapping(address => uint) public stakes;
+
+    // track the number of active surveys for each user
+    mapping(address => uint) public activeSurveyCount;
+
+    function stakeEther() external payable 
+    {
+        require(msg.value > 0, "Must stake more than 0 ETH");
+        stakes[msg.sender] += msg.value;
+    }
+
+    function unstakeEther(uint amount) external {
+        require(stakes[msg.sender] >= amount, "Insufficient staked amount");
+       
+        // Require users to keep 1 ether in their account if they are participating in active surveys
+        if (activeSurveyCount[msg.sender] > 0) 
+        {
+            require(stakes[msg.sender] - amount >= 1 ether, "Must maintain minimum stake due to active survey participation");
+        }
+        stakes[msg.sender] -= amount;
+        payable(msg.sender).transfer(amount);
+    }
+
+
     // Register a user with a custom name
     function register(string calldata userName) external 
     {
@@ -59,17 +84,31 @@ contract BlockPoll {
     // Vote in a survey
     function vote(uint surveyId, uint optionIndex) external 
     {
+        updateSurveyStatus(surveyId);
+
         Survey storage survey = surveys[surveyId];
-        require(survey.dataCount < survey.maxDataPoints, "Maximum answers reached");
-        require(survey.isOpen == true, "Survey is closed");
-        require(survey.hasVoted[msg.sender] == false, "You can only vote once.");
-        survey.results[optionIndex] += 1;
+        require(survey.isOpen, "Survey is closed");
+        require(!survey.hasVoted[msg.sender], "You can only vote once.");
+        require(stakes[msg.sender] >= 1 ether, "Insufficient stake");
+        require(activeSurveyCount[msg.sender] < 50, "Active survey participation limit reached");
+
+        survey.results[optionIndex] += 1;  // Each vote counts as one
         survey.dataCount += 1;
         survey.hasVoted[msg.sender] = true;
-        survey.participants.push(msg.sender); // Add participant to the list
         survey.lastVoteTimestamp[msg.sender] = block.timestamp;
+        activeSurveyCount[msg.sender]++;  // Increment active survey count for user
 
-        if (survey.dataCount == survey.maxDataPoints)
+        if (survey.dataCount >= survey.maxDataPoints) 
+        {
+            closeSurvey(surveyId);
+        }
+    }
+
+
+    function updateSurveyStatus(uint surveyId) internal 
+    {
+        Survey storage survey = surveys[surveyId];
+        if (survey.isOpen && (survey.dataCount >= survey.maxDataPoints || block.number >= survey.expiryBlock)) 
         {
             closeSurvey(surveyId);
         }
@@ -81,19 +120,29 @@ contract BlockPoll {
         Survey storage survey = surveys[surveyId];
         require(msg.sender == survey.owner || survey.dataCount == survey.maxDataPoints || 
                 block.number >= survey.expiryBlock, "Cannot close survey yet");
-        if (survey.isOpen) {
+        
+        if (survey.isOpen) 
+        {
             survey.isOpen = false;
+            for (uint i = 0; i < survey.participants.length; i++) 
+            {
+                address participant = survey.participants[i];
+                if (activeSurveyCount[participant] > 0) 
+                {
+                    activeSurveyCount[participant]--;  // Decrement active survey count for each participant
+                }
+            }
             calculateRewards(surveyId);
         }
     }
 
-    function viewResults(uint surveyId) public view returns (uint[] memory) 
-    {
+
+    function viewResults(uint surveyId) public view returns (uint[] memory) {
         Survey storage survey = surveys[surveyId];
 
         require(survey.allowPublicResults || msg.sender == survey.owner, "Not authorized to view results");
-        uint[] memory resultsArray = new uint[](survey.options.length);
         
+        uint[] memory resultsArray = new uint[](survey.options.length);
         for (uint i = 0; i < survey.options.length; i++) 
         {
             resultsArray[i] = survey.results[i];
@@ -160,8 +209,8 @@ contract BlockPoll {
 
         // Clear balances to prevent reentry attack
         rewardBalances[surveyId][msg.sender] = 0;
-        (bool sent, ) = msg.sender.call{value: reward}("");
-        require(sent, "Failed to send reward");
+        
+        payable(msg.sender).transfer(reward);
     }
 
     receive() external payable {}
