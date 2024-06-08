@@ -160,46 +160,47 @@ contract BlockPoll {
         return surveyIds;
     }
 
-    function calculateRewards(uint surveyId) internal 
-    {
+    function calculateRewards(uint surveyId) internal {
         Survey storage survey = surveys[surveyId];
         require(!survey.isOpen, "Survey must be closed to distribute rewards");
 
         uint totalReward = address(this).balance;
+        uint baseRewardPerParticipant;
+        uint extraReward = 0;
 
-        uint eligibleForExtra = 0;
-        for (uint i = 0; i < survey.participants.length; i++) 
+        if (survey.participants.length > 0) 
         {
-            if (block.timestamp - survey.lastVoteTimestamp[survey.participants[i]] <= 1 days) 
+            baseRewardPerParticipant = totalReward / survey.participants.length;
+
+            uint eligibleForExtra = 0;
+            for (uint i = 0; i < survey.participants.length; i++) 
             {
-                eligibleForExtra++;
-            }
-        }
-
-        if (eligibleForExtra != 0)
-        {
-            uint baseRewardPerParticipant = totalReward / survey.participants.length;
-            uint extraReward = (baseRewardPerParticipant * (10 / 100)) * survey.participants.length / eligibleForExtra;
-        }
-        else
-        {
-            uint baseRewardPerParticipant = totalReward / survey.participants.length;
-            uint extraReward = 0;
-        }
-        
-        for (uint i = 0; i < survey.participants.length; i++) 
-        {
-            address participant = survey.participants[i];
-            uint participantReward = baseRewardPerParticipant;
-
-            if (block.timestamp - survey.lastVoteTimestamp[participant] <= 1 days) 
-            {
-                participantReward += extraReward;
+                if (block.timestamp - survey.lastVoteTimestamp[survey.participants[i]] <= 1 days) 
+                {
+                    eligibleForExtra++;
+                }
             }
 
-            rewardBalances[surveyId][participant] += participantReward;
+            if (eligibleForExtra != 0) 
+            {
+                extraReward = (baseRewardPerParticipant * 10 / 100) * survey.participants.length / eligibleForExtra;
+            }
+
+            for (uint i = 0; i < survey.participants.length; i++) 
+            {
+                address participant = survey.participants[i];
+                uint participantReward = baseRewardPerParticipant;
+
+                if (block.timestamp - survey.lastVoteTimestamp[participant] <= 1 days) 
+                {
+                    participantReward += extraReward;
+                }
+
+                rewardBalances[surveyId][participant] += participantReward;
+            }
         }
     }
+
 
     // Function for participants to withdraw their rewards
     function withdrawReward(uint surveyId) public 
