@@ -40,6 +40,12 @@ contract BlockPoll {
     // track the number of active surveys for each user
     mapping(address => uint) public activeSurveyCount;
 
+    // Function to fetch survey details by survey ID
+    function getSurveyDetails(uint surveyId) public view returns (string memory description, uint[] memory options) {
+        Survey storage survey = surveys[surveyId];
+        return (survey.description, survey.options);
+    }
+
     function stakeEther() external payable 
     {
         require(msg.value > 0, "Must stake more than 0 ETH");
