@@ -10,7 +10,7 @@ contract BlockPoll {
         address owner; // Address of the user who created the survey
         mapping(uint => uint) results; // Mapping from option index to count of votes
         mapping(address => bool) hasVoted; // Tracks whether an address has voted in this survey
-        mapping(address => uint) lastVoteTimestamp; // Tracks the timestamp of the last vote for each user
+        mapping(address => bool) dailyBonus; // Tracks if user voted previous day
 
         uint maxDataPoints; // Maximum number of votes (data points) accepted for the survey
         uint dataCount; // Current count of data points collected
@@ -24,6 +24,8 @@ contract BlockPoll {
 
     // Mapping of survey ID to (participant address to reward balance)
     mapping(uint => mapping(address => uint)) public rewardBalances;
+
+    mapping(address => uint) public lastVoteTimestamp;
 
     // Mapping from survey ID to Survey struct, storing all surveys
     mapping(uint => Survey) public surveys;
@@ -88,27 +90,40 @@ contract BlockPoll {
     }
 
     // Vote in a survey
-    function vote(uint surveyId, uint optionIndex) external 
-    {
+    function vote(uint surveyId, uint optionIndex) external {
         updateSurveyStatus(surveyId);
-
         Survey storage survey = surveys[surveyId];
+
         require(survey.isOpen, "Survey is closed");
-        require(!survey.hasVoted[msg.sender], "You can only vote once.");
+        require(!survey.hasVoted[msg.sender], "You can only vote once per survey.");
         require(stakes[msg.sender] >= 1 ether, "Insufficient stake");
         require(activeSurveyCount[msg.sender] < 50, "Active survey participation limit reached");
 
-        survey.results[optionIndex] += 1;  // Each vote counts as one
+        uint oneDay = 86400; 
+        uint currentTime = block.timestamp;
+        uint lastTimeVoted = lastVoteTimestamp[msg.sender];
+        uint timeSinceLastVote = currentTime - lastTimeVoted;
+
+        // Check if the last vote was between 24 and 48 hours ago
+        bool eligibleForBonus = timeSinceLastVote >= oneDay && timeSinceLastVote < 2 * oneDay;
+
+        if (eligibleForBonus) {
+            survey.dailyBonus[msg.sender] = true; // Set daily bonus eligibility
+            lastVoteTimestamp[msg.sender] = currentTime;  // Update the timestamp only if eligible for daily bonus
+        } else {
+            survey.dailyBonus[msg.sender] = false;
+        }
+
+        survey.results[optionIndex] += 1;
         survey.dataCount += 1;
         survey.hasVoted[msg.sender] = true;
-        survey.lastVoteTimestamp[msg.sender] = block.timestamp;
-        activeSurveyCount[msg.sender]++;  // Increment active survey count for user
+        activeSurveyCount[msg.sender]++;
 
-        if (survey.dataCount >= survey.maxDataPoints) 
-        {
+        if (survey.dataCount >= survey.maxDataPoints) {
             closeSurvey(surveyId);
         }
     }
+
 
 
     function updateSurveyStatus(uint surveyId) internal 
@@ -181,7 +196,7 @@ contract BlockPoll {
             uint eligibleForExtra = 0;
             for (uint i = 0; i < survey.participants.length; i++) 
             {
-                if (block.timestamp - survey.lastVoteTimestamp[survey.participants[i]] <= 1 days) 
+                if (survey.dailyBonus[survey.participants[i]]) 
                 {
                     eligibleForExtra++;
                 }
@@ -197,7 +212,7 @@ contract BlockPoll {
                 address participant = survey.participants[i];
                 uint participantReward = baseRewardPerParticipant;
 
-                if (block.timestamp - survey.lastVoteTimestamp[participant] <= 1 days) 
+                if (survey.dailyBonus[survey.participants[i]]) 
                 {
                     participantReward += extraReward;
                 }
