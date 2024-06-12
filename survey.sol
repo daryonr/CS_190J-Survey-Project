@@ -234,6 +234,9 @@ contract BlockPoll {
         
         payable(msg.sender).transfer(reward);
     }
-
+    function isSurveyOpen(uint surveyId) public view returns (bool) {
+        return surveys[surveyId].isOpen;
+    }
+    
     receive() external payable {}
 }
