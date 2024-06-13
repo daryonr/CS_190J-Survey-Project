@@ -1,6 +1,5 @@
-// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
-
+// import {console} from "forge-std/Test.sol";
 contract BlockPoll {
     struct Survey 
     {
@@ -117,6 +116,7 @@ contract BlockPoll {
         survey.results[optionIndex] += 1;
         survey.dataCount += 1;
         survey.hasVoted[msg.sender] = true;
+        survey.participants.push(msg.sender); // Track participants
         activeSurveyCount[msg.sender]++;
 
         if (survey.dataCount >= survey.maxDataPoints) {
@@ -184,7 +184,8 @@ contract BlockPoll {
     function calculateRewards(uint surveyId) internal {
         Survey storage survey = surveys[surveyId];
         require(!survey.isOpen, "Survey must be closed to distribute rewards");
-
+        // console.log("Contract balance:", address(this).balance);
+        // console.log("Number of participants:", survey.participants.length);
         uint totalReward = address(this).balance;
         uint baseRewardPerParticipant;
         uint extraReward = 0;
@@ -237,6 +238,5 @@ contract BlockPoll {
     function isSurveyOpen(uint surveyId) public view returns (bool) {
         return surveys[surveyId].isOpen;
     }
-    
     receive() external payable {}
 }
