@@ -1,0 +1,25 @@
+# Ignore build artifacts
+out/
+cache/
+lib/
+
+# Ignore dependencies
+lib/
+
+# Ignore node_modules if using JavaScript/TypeScript for scripting
+node_modules/
+
+# Ignore test coverage reports
+coverage/
+
+# Ignore environment variable files
+.env
+
+# Ignore editor and OS specific files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

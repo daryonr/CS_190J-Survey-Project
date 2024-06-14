@@ -137,7 +137,7 @@ contract BlockPollPenTest is Test {
     // Purpose: Assesses the contract's resilience against denial-of-service attacks that could be executed through rapid staking and unstaking actions.
     // Specification: The contract should efficiently manage frequent state changes without significant performance degradation or susceptibility to DoS.
     // Expected Result: The system should handle repeated staking and unstaking without crashing or slowing down significantly, ensuring availability even under stress.
-    // Security Issue: Denial of Service Attack
+    // Security Issue: Denial of Service (DoS) Attack
     // Potential Damage: Resource exhaustion, contract slowdown or crash, denial of service to legitimate users.
     function testDoSViaStaking() public {
         vm.startPrank(attacker);
